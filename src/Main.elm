@@ -1,19 +1,19 @@
 module Main exposing (..)
 
 import Browser
+import Browser.Events exposing (onKeyDown, onKeyUp)
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import Html.Events exposing (onMouseOver)
 import Html.Events.Extra.Wheel as Wheel
-
-
-
--- Some green: red = 25, green = 200, blue = 110
+import Json.Decode as Decode
 
 
 type Msg
     = ColorCell Int
     | ChangeColor Wheel.Event
+    | KeyPressDowns String -- ?
+    | ClearPressed
 
 
 type alias RGB =
@@ -28,23 +28,50 @@ type alias Model =
     { color : RGB, previousColor : RGB, cells : List Cell, colors : List RGB }
 
 
+getColor : Int -> RGB
+getColor n =
+    case n of
+        0 ->
+            -- white
+            { red = 255, green = 255, blue = 255 }
+
+        {--*** this value only exists to make it clear we're using our catch-all. *** --}
+        1 ->
+            getColor 999
+
+        2 ->
+            --  yellow
+            { red = 252, green = 231, blue = 3 }
+
+        3 ->
+            -- blue
+            { red = 1, green = 99, blue = 255 }
+
+        4 ->
+            -- green
+            { red = 25, green = 200, blue = 110 }
+
+        5 ->
+            -- red
+            { red = 200, green = 0, blue = 50 }
+
+        6 ->
+            -- orange
+            { red = 252, green = 186, blue = 3 }
+
+        _ ->
+            { red = 50, green = 50, blue = 50 }
+
+
 colorList : List RGB
 colorList =
-    [ { red = 50, green = 50, blue = 50 } -- gray
-    , { red = 252, green = 186, blue = 3 } -- orange
-    , { red = 252, green = 231, blue = 3 } -- yellow
-    , { red = 1, green = 99, blue = 255 } -- blue
-    , { red = 25, green = 200, blue = 110 } -- green
-    , { red = 200, green = 0, blue = 50 } -- red
-    , { red = 255, green = 255, blue = 255 } -- white
-    ]
+    List.map getColor (List.range 0 6)
 
 
 initialModel : Model
 initialModel =
-    { color =
-        { red = 50, green = 50, blue = 50 }
-    , previousColor = { red = 255, green = 255, blue = 255 }
+    { color = getColor 999
+    , previousColor = getColor 0
     , cells = createCells (24 ^ 2) []
     , colors = colorList
     }
@@ -79,7 +106,7 @@ viewCell cell =
 createCells n cells =
     let
         newCells =
-            { id = n, color = { red = 255, green = 255, blue = 255 } } :: cells
+            { id = n, color = getColor 0 } :: cells
     in
     case n of
         1 ->
@@ -89,9 +116,15 @@ createCells n cells =
             createCells (n - 1) newCells
 
 
-update : Msg -> Model -> Model
+update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
+        KeyPressDowns code ->
+            ( { model | color = getColor (Maybe.withDefault 0 (String.toInt code)) }, Cmd.none )
+
+        ClearPressed ->
+            ( model, Cmd.none )
+
         ChangeColor wheel ->
             let
                 findNext n =
@@ -127,14 +160,8 @@ update msg model =
                     else
                         Maybe.withDefault model.color (findNext model.colors)
             in
-            { model | color = newColor, previousColor = model.color }
+            ( { model | color = newColor, previousColor = model.color }, Cmd.none )
 
-        --List.map (\color ->
-        --    if color = model.color then
-        --
-        --)
-        --in
-        --{ model | color = { red = 1, green = 99, blue = 255 } }
         ColorCell index ->
             let
                 newCells =
@@ -148,21 +175,31 @@ update msg model =
                         )
                         model.cells
             in
-            { model | cells = newCells }
+            ( { model | cells = newCells }, Cmd.none )
+
+
+keyDecoder : Decode.Decoder String
+keyDecoder =
+    Decode.field "key" Decode.string
+
+
+subscriptions : Model -> Sub Msg
+subscriptions model =
+    Sub.batch
+        [ onKeyDown (Decode.map KeyPressDowns keyDecoder)
+        , onKeyUp (Decode.succeed ClearPressed)
+        ]
 
 
 main : Program () Model Msg
 main =
-    Browser.sandbox
-        { init = initialModel
-        , view = view
+    Browser.document
+        { init = \() -> ( initialModel, Cmd.none )
         , update = update
+        , view =
+            \m ->
+                { title = "Sketchin' app"
+                , body = [ view m ]
+                }
+        , subscriptions = subscriptions
         }
-
-
-
---
---main =
---    text ""
---
---
